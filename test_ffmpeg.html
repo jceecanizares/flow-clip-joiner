@@ -1,0 +1,25 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>FFmpeg WASM Test</title>
+</head>
+<body>
+    <script type="module">
+        import { FFmpeg } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/+esm';
+        import { fetchFile } from 'https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/+esm';
+
+        const ffmpeg = new FFmpeg();
+        ffmpeg.on('log', ({ message }) => console.log(message));
+
+        async function run() {
+            console.log("Loading ffmpeg...");
+            await ffmpeg.load({
+                coreURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.js',
+                wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm',
+            });
+            console.log("FFmpeg loaded!");
+        }
+        run().catch(console.error);
+    </script>
+</body>
+</html>
