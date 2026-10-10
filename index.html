@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Flow Clip Joiner</title>
+    <link rel="stylesheet" href="styles.css">
+    <!-- Using a slightly older version of FFmpeg WASM that works well in browser environments -->
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/ffmpeg@0.12.10/dist/umd/ffmpeg.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@ffmpeg/util@0.12.1/dist/umd/index.js"></script>
+</head>
+<body>
+    <div class="container">
+        <h1>Flow Clip Joiner</h1>
+        <p class="subtitle">Join and trim multiple MP4 clips entirely in your browser using WebAssembly.</p>
+
+        <div id="drop-zone" class="drop-zone">
+            <p>Drag & Drop MP4 video files here</p>
+            <p>or</p>
+            <input type="file" id="file-input" multiple accept="video/mp4,video/*" style="display: none;">
+            <button id="browse-btn" class="btn primary">Browse Files</button>
+        </div>
+
+        <div class="queue-container">
+            <h2>Clip Queue</h2>
+            <div id="clip-queue" class="clip-queue">
+                <!-- Clips will be injected here via JS -->
+            </div>
+            <div id="queue-empty" class="queue-empty">
+                No clips added yet.
+            </div>
+        </div>
+
+        <div class="actions">
+            <button id="stitch-btn" class="btn success" disabled>Stitch & Join Clips</button>
+            <div id="progress-container" class="progress-container" style="display: none;">
+                <div class="progress-bar">
+                    <div id="progress-fill" class="progress-fill"></div>
+                </div>
+                <p id="progress-text">Processing... 0%</p>
+            </div>
+        </div>
+
+        <div id="result-container" class="result-container" style="display: none;">
+            <h2>Result</h2>
+            <video id="preview-player" controls class="preview-player"></video>
+            <div class="download-action">
+                <a id="download-btn" class="btn primary download-btn" download="joined_video.mp4">Download Joined Video</a>
+            </div>
+        </div>
+    </div>
+
+    <!-- We will use type="module" for app.js so we can use modern JS, but since we included ffmpeg via script tags, it will be available via global variables FFmpegWASM / FFmpegUtil -->
+    <script type="module" src="app.js"></script>
+</body>
+</html>
