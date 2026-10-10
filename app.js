@@ -1,6 +1,10 @@
 // State
 let clips = [];
 let ffmpeg = null;
+let parsedHandoff = {
+    cells: [],
+    subtitle: null
+};
 
 // DOM Elements
 const dropZone = document.getElementById('drop-zone');
@@ -9,9 +13,14 @@ const browseBtn = document.getElementById('browse-btn');
 const clipQueue = document.getElementById('clip-queue');
 const queueEmpty = document.getElementById('queue-empty');
 const stitchBtn = document.getElementById('stitch-btn');
+const parseHandoffBtn = document.getElementById('parse-handoff-btn');
+const handoffInput = document.getElementById('handoff-input');
+const parsedResults = document.getElementById('parsed-results');
 
 // Initialize event listeners
 function init() {
+    parseHandoffBtn.addEventListener('click', parseHandoff);
+
     // File upload events
     browseBtn.addEventListener('click', () => fileInput.click());
     fileInput.addEventListener('change', handleFileSelect);
@@ -40,6 +49,116 @@ function init() {
     stitchBtn.addEventListener('click', processClips);
 }
 
+// Handoff Parsing Logic
+function parseHandoff() {
+    const text = handoffInput.value;
+    if (!text.trim()) return;
+
+    parsedHandoff.cells = [];
+    parsedHandoff.subtitle = null;
+
+    const lines = text.split('\n');
+    let currentCell = null;
+    let subtitleText = null;
+    let subtitleStart = null;
+    let subtitleEnd = null;
+
+    // Basic heuristic parsing
+    // Looking for lines with Cell names, Trim In, Trim Out, or verse patterns
+    for (let i = 0; i < lines.length; i++) {
+        const line = lines[i].trim();
+
+        // Match Cell patterns (e.g. "Cell A", "Shot 1", "Clip 2")
+        const cellMatch = line.match(/(?:Cell|Shot|Clip)\s+([A-Z0-9]+)/i);
+
+        // Match Trims (e.g. "Trim In: 2.5", "Trim Out: 10s")
+        const trimInMatch = line.match(/Trim In:\s*([\d.]+)/i);
+        const trimOutMatch = line.match(/Trim Out:\s*([\d.]+)/i);
+
+        // Match Verse / Subtitle pattern (e.g. "V3: John 3:16", "Text: Hello world")
+        // Also look for timestamps in the same or nearby lines (e.g. "1.500s - 14.500s")
+        const subtitleMatch = line.match(/^(?:V[0-9]+|Text|Scripture|Verse):\s*(.+)/i);
+        const timeMatch = line.match(/([\d.]+)(?:s|)\s*-\s*([\d.]+)(?:s|)/i);
+        const timeMatchAlt = line.match(/T-([\d.]+)/i); // e.g. T-5.500
+
+        if (cellMatch && !line.match(/Trim/i)) {
+            if (currentCell) parsedHandoff.cells.push(currentCell);
+            currentCell = { name: cellMatch[0], trimIn: 0, trimOut: '' };
+        } else if (!currentCell && (trimInMatch || trimOutMatch)) {
+            // Implicit cell if they just paste trims
+            currentCell = { name: `Cell ${parsedHandoff.cells.length + 1}`, trimIn: 0, trimOut: '' };
+        }
+
+        if (currentCell) {
+            if (trimInMatch) currentCell.trimIn = parseFloat(trimInMatch[1]);
+            if (trimOutMatch) currentCell.trimOut = parseFloat(trimOutMatch[1]);
+        }
+
+        if (subtitleMatch) {
+            subtitleText = subtitleMatch[1];
+        } else if (!subtitleText && line.match(/^[A-Z][a-z]+ \d+:\d+/)) {
+            // Match raw verse like "John 3:16"
+            subtitleText = line;
+        }
+
+        if (timeMatch) {
+            subtitleStart = parseFloat(timeMatch[1]);
+            subtitleEnd = parseFloat(timeMatch[2]);
+        } else if (timeMatchAlt && subtitleStart === null) {
+            // If it's a T- setup, we might only have a start, or it might indicate something else, but let's just grab what we can
+            subtitleStart = parseFloat(timeMatchAlt[1]);
+            subtitleEnd = subtitleStart + 10; // Default 10s if we only have T-
+        }
+    }
+
+    if (currentCell) {
+        parsedHandoff.cells.push(currentCell);
+    }
+
+    if (subtitleText && subtitleStart !== null) {
+        parsedHandoff.subtitle = {
+            text: subtitleText,
+            start: subtitleStart,
+            end: subtitleEnd || (subtitleStart + 10)
+        };
+    }
+
+    renderParsedResults();
+}
+
+// Render the parsed results to UI
+function renderParsedResults() {
+    parsedResults.innerHTML = '';
+
+    if (parsedHandoff.cells.length === 0 && !parsedHandoff.subtitle) {
+        parsedResults.style.display = 'none';
+        return;
+    }
+
+    parsedResults.style.display = 'block';
+
+    let html = '<h3>Parsed Configuration</h3>';
+
+    if (parsedHandoff.cells.length > 0) {
+        html += '<div class="parsed-cells">';
+        parsedHandoff.cells.forEach(cell => {
+            html += `<div class="parsed-item">
+                <strong>${cell.name}</strong> - Trim In: ${cell.trimIn}s | Trim Out: ${cell.trimOut}s
+            </div>`;
+        });
+        html += '</div>';
+    }
+
+    if (parsedHandoff.subtitle) {
+        html += `<div class="parsed-subtitle">
+            <strong>Subtitle:</strong> "${parsedHandoff.subtitle.text}" <br>
+            <strong>Active:</strong> ${parsedHandoff.subtitle.start}s to ${parsedHandoff.subtitle.end}s
+        </div>`;
+    }
+
+    parsedResults.innerHTML = html;
+}
+
 // Handle selected files
 function handleFileSelect(e) {
     if (e.target.files.length > 0) {
@@ -51,16 +170,30 @@ function handleFileSelect(e) {
 
 // Process raw files into clip state
 function handleFiles(files) {
+    const startIndex = clips.length;
     const newClips = Array.from(files)
         .filter(file => file.type.startsWith('video/') || file.name.endsWith('.mp4'))
-        .map(file => ({
-            id: generateId(),
-            file: file,
-            name: file.name,
-            size: formatBytes(file.size),
-            trimStart: 0,
-            trimEnd: '' // empty means end of file
-        }));
+        .map((file, i) => {
+            const overallIndex = startIndex + i;
+            let trimStart = 0;
+            let trimEnd = '';
+
+            // Auto-map parsed cells to uploaded clips
+            if (parsedHandoff.cells && parsedHandoff.cells[overallIndex]) {
+                const cell = parsedHandoff.cells[overallIndex];
+                trimStart = cell.trimIn || 0;
+                trimEnd = cell.trimOut || '';
+            }
+
+            return {
+                id: generateId(),
+                file: file,
+                name: file.name,
+                size: formatBytes(file.size),
+                trimStart: trimStart,
+                trimEnd: trimEnd
+            };
+        });
 
     if (newClips.length > 0) {
         clips = [...clips, ...newClips];
@@ -191,6 +324,16 @@ async function initFFmpeg() {
         wasmURL: 'https://cdn.jsdelivr.net/npm/@ffmpeg/core@0.12.6/dist/umd/ffmpeg-core.wasm',
     });
     console.log('FFmpeg loaded successfully');
+
+    // Load a font for drawtext if we haven't already
+    try {
+        const fontData = await FFmpegUtil.fetchFile('https://raw.githubusercontent.com/google/fonts/main/ofl/playfairdisplay/PlayfairDisplay-Regular.ttf');
+        await ffmpeg.writeFile('CinematicFont.ttf', fontData);
+        console.log('Cinematic Serif Font loaded for subtitles.');
+    } catch (e) {
+        console.warn('Could not load serif font, falling back to basic font:', e);
+    }
+
     return ffmpeg;
 }
 
@@ -255,12 +398,29 @@ async function processClips() {
         }
 
         // Build the concat part of filter_complex
-        // [v0][a0][v1][a1]concat=n=2:v=1:a=1[outv][outa]
+        // [v0][a0][v1][a1]concat=n=2:v=1:a=1[concatv][outa]
         let concatStreams = '';
         for (let i = 0; i < clips.length; i++) {
             concatStreams += `[v${i}][a${i}]`;
         }
-        filterComplex += `${concatStreams}concat=n=${clips.length}:v=1:a=1[outv][outa]`;
+
+        let outVNode = '[concatv]';
+        filterComplex += `${concatStreams}concat=n=${clips.length}:v=1:a=1${outVNode}[outa];`;
+
+        // Add subtitle overlay if parsed
+        if (parsedHandoff.subtitle && parsedHandoff.subtitle.text) {
+            progressText.innerText = 'Applying scripture subtitles...';
+            // Escaping text for drawtext
+            const textEscaped = parsedHandoff.subtitle.text.replace(/:/g, '\\:').replace(/'/g, "\\'").replace(/,/g, '\\,');
+
+            // Subtitle parameters (Cream color #EADCC9, serif/cinematic font, lower third)
+            const drawtextFilter = `drawtext=fontfile=CinematicFont.ttf:text='${textEscaped}':fontcolor=0xEADCC9:fontsize=h/15:x=(w-text_w)/2:y=h-(h/4):shadowcolor=black@0.8:shadowx=3:shadowy=3:enable='between(t,${parsedHandoff.subtitle.start},${parsedHandoff.subtitle.end})'`;
+
+            filterComplex += `${outVNode}${drawtextFilter}[outv]`;
+        } else {
+            // If no subtitle, just rename concatv to outv
+            filterComplex += `${outVNode}copy[outv]`;
+        }
 
         const outputArgs = [
             '-filter_complex', filterComplex,

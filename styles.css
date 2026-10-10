@@ -56,6 +56,64 @@ h2 {
     padding-bottom: 0.5rem;
 }
 
+/* Handoff Parser */
+.handoff-container {
+    background-color: var(--queue-item-bg);
+    border: 1px solid var(--border-color);
+    border-radius: 8px;
+    padding: 1.5rem;
+    margin-bottom: 2rem;
+}
+
+.handoff-input {
+    width: 100%;
+    background-color: var(--input-bg);
+    border: 1px solid var(--border-color);
+    color: var(--text-color);
+    padding: 1rem;
+    border-radius: 4px;
+    font-family: monospace;
+    font-size: 0.9rem;
+    resize: vertical;
+    margin-bottom: 1rem;
+}
+
+.handoff-input:focus {
+    outline: none;
+    border-color: var(--primary-color);
+}
+
+.parse-btn {
+    margin-bottom: 1rem;
+}
+
+.parsed-results {
+    background-color: #222;
+    border: 1px solid var(--border-color);
+    border-radius: 4px;
+    padding: 1rem;
+    font-size: 0.9rem;
+}
+.parsed-results h3 {
+    font-size: 1rem;
+    margin-bottom: 0.5rem;
+    color: #fff;
+}
+.parsed-item {
+    padding: 0.25rem 0;
+    border-bottom: 1px solid #333;
+}
+.parsed-item:last-child {
+    border-bottom: none;
+}
+.parsed-subtitle {
+    margin-top: 1rem;
+    padding-top: 1rem;
+    border-top: 1px dashed var(--border-color);
+    font-style: italic;
+    color: #cbd5e1;
+}
+
 /* Drop Zone */
 .drop-zone {
     border: 2px dashed var(--border-color);

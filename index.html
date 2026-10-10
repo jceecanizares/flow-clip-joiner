@@ -14,6 +14,15 @@
         <h1>Flow Clip Joiner</h1>
         <p class="subtitle">Join and trim multiple MP4 clips entirely in your browser using WebAssembly.</p>
 
+        <div class="handoff-container">
+            <h2>Handoff Parser</h2>
+            <textarea id="handoff-input" class="handoff-input" rows="5" placeholder="Paste Compiler / Strategist Handoff here..."></textarea>
+            <button id="parse-handoff-btn" class="btn primary parse-btn">Parse Handoff</button>
+            <div id="parsed-results" class="parsed-results" style="display: none;">
+                <!-- Parsed cells and subtitles will be injected here -->
+            </div>
+        </div>
+
         <div id="drop-zone" class="drop-zone">
             <p>Drag & Drop MP4 video files here</p>
             <p>or</p>
